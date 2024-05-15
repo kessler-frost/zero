@@ -3,7 +3,7 @@ import os
 import signal
 import sys
 from functools import partial
-from multiprocessing.pool import Pool
+from multiprocessing import Pool
 from typing import Callable, Dict, Optional
 
 import zmq.utils.win32
@@ -45,7 +45,6 @@ class ZeroServer:
         """
         self._broker: ZeroMQBroker = None  # type: ignore
         self._device_comm_channel: str = None  # type: ignore
-        self._pool: Pool = None  # type: ignore
         self._device_ipc: str = None  # type: ignore
 
         self._host = host
@@ -134,18 +133,21 @@ class ZeroServer:
             self._terminate_server()
 
     def _start_server(self, workers: int, spawn_worker: Callable):
-        self._pool = Pool(workers)
 
         # process termination signals
         util.register_signal_term(self._sig_handler)
 
         # TODO: by default we start the workers with processes,
         # but we need support to run only router, without workers
-        self._pool.map_async(spawn_worker, list(range(1, workers + 1)))
+        with Pool(workers) as pool:
+            try:
+                pool.map_async(spawn_worker, range(1, workers + 1))
 
-        # blocking
-        with zmq.utils.win32.allow_interrupt(self._terminate_server):
-            self._broker.listen(self._address, self._device_comm_channel)
+                # blocking
+                with zmq.utils.win32.allow_interrupt(self._terminate_server):
+                    self._broker.listen(self._address, self._device_comm_channel)
+            except KeyboardInterrupt:
+                raise
 
     def _get_comm_channel(self) -> str:
         if os.name == "posix":
@@ -177,7 +179,6 @@ class ZeroServer:
         logging.warning("Terminating server at %d", self._port)
         if self._broker is not None:
             self._broker.close()
-        self._terminate_pool()
         self._remove_ipc()
         sys.exit(0)
 
@@ -189,9 +190,3 @@ class ZeroServer:
             and os.path.exists(self._device_ipc)
         ):
             os.remove(self._device_ipc)
-
-    @util.log_error
-    def _terminate_pool(self):
-        self._pool.terminate()
-        self._pool.close()
-        self._pool.join()
