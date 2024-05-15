@@ -4,6 +4,7 @@ import signal
 import sys
 from functools import partial
 from multiprocessing import Pool
+from concurrent.futures import ProcessPoolExecutor
 from typing import Callable, Dict, Optional
 
 import zmq.utils.win32
@@ -139,15 +140,12 @@ class ZeroServer:
 
         # TODO: by default we start the workers with processes,
         # but we need support to run only router, without workers
-        with Pool(workers) as pool:
-            try:
-                pool.map_async(spawn_worker, range(1, workers + 1))
 
-                # blocking
-                with zmq.utils.win32.allow_interrupt(self._terminate_server):
-                    self._broker.listen(self._address, self._device_comm_channel)
-            except KeyboardInterrupt:
-                raise
+        with ProcessPoolExecutor(max_workers=workers) as executor:
+            executor.map(spawn_worker, range(1, workers + 1))
+            # blocking
+            with zmq.utils.win32.allow_interrupt(self._terminate_server):
+                self._broker.listen(self._address, self._device_comm_channel)
 
     def _get_comm_channel(self) -> str:
         if os.name == "posix":
