@@ -9,6 +9,7 @@ from typing import Callable, Optional, get_origin, get_type_hints
 import msgspec
 
 builtin_types: typing.List = [
+    None,
     type(None),
     bool,
     int,
