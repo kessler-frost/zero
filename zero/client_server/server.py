@@ -3,7 +3,7 @@ import os
 import signal
 import sys
 from functools import partial
-from multiprocessing import Pool
+from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
 from typing import Callable, Dict, Optional
 
@@ -150,6 +150,7 @@ class ZeroServer:
     def _get_comm_channel(self) -> str:
         if os.name == "posix":
             ipc_id = util.unique_id()
+            ipc_id = str(Path(__file__).parent / f"{ipc_id}.ipc")
             self._device_ipc = f"{ipc_id}.ipc"
             return f"ipc://{ipc_id}.ipc"
 
